@@ -24,5 +24,4 @@ When code is pushed to main it will ran CI workflow which consists of 3 jobs:
     - saves the image tar archive
 3. **Release**
     - pushes release tag to registry
-pushing docker image to registry
-The Continuous Integration (CI) pipeline is configured using GitHub Actions (`.github/workflows/ci.yml`) and is designed to run automatically when code is pushed or merged into the `main` branch. 
+
