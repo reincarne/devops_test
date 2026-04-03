@@ -1,0 +1,77 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Format Branch Name
+        run: |
+          BRANCH_CLEAN=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "CLEAN_BRANCH=$BRANCH_CLEAN" >> $GITHUB_ENV
+
+      - name: Fetch Tags
+        run: git fetch --tags --force
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4.4.2
+        with:
+          versionSpec: '6.x'
+
+      - name: Generate Semantic Version
+        id: version
+        uses: gittools/actions/gitversion/execute@v4.4.2
+
+      - name: Push Release Tag
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git tag v${{ steps.version.outputs.semVer }}
+          git push origin v${{ steps.version.outputs.semVer }}
+          echo "FINAL_TAG=v${{ steps.version.outputs.semVer }}" >> $GITHUB_ENV
+
+      - name: Build image using Buildah
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: app
+          tags: ${{ env.FINAL_TAG || github.sha }} latest ${{ github.sha }}
+          containerfiles: ./app/Dockerfile
+          context: ./app
+          oci: true
+          build-args: |
+            CI_BUILD_VERSION=${{ env.FINAL_TAG || github.sha }}
+            CI_COMMIT_SHA=${{ github.sha }}
+
+      - name: Export built image to tarball
+        run: |
+          buildah push ${{ steps.build-image.outputs.image-with-tag }} docker-archive:/tmp/app-image.tar
+
+      - name: Push to GitHub Container Registry
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ghcr.io/${{ github.repository }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save built image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-image-${{ env.FINAL_TAG || github.sha }}
+          path: /tmp/app-image.tar
+          retention-days: 7

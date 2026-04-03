@@ -1,5 +1,9 @@
 version: "3.9"
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
   app:
     build:
       context: ./app
@@ -7,12 +11,14 @@ services:
     ports:
       - "8080:5000"
     depends_on:
+      - redis
       - worker
+      
   worker:
     build:
       context: ./worker
       dockerfile: Dockerfile
-    expose:
-      - "5001"
+    depends_on:
+      - redis
     volumes:
       - ./logs/worker:/home/appuser/code/logs

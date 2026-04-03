@@ -1,9 +1,9 @@
 from flask import Flask
-import requests
+from celery import Celery
 
 app = Flask(__name__)
 
-WORKER_URL = "http://worker:5001/process"
+celery_app = Celery('worker', broker='redis://redis:6379/0', backend='redis://redis:6379/0')
 
 @app.route("/")
 def home():
@@ -12,7 +12,8 @@ def home():
 @app.route("/task")
 def send_task():
     try:
-        r = requests.get(WORKER_URL)
-        return f"Worker response: {r.text}"
+        result = celery_app.send_task('worker.process_task')
+        task_result = result.get(timeout=5)
+        return f"Worker response: {task_result}"
     except Exception as e:
-        return f"Error contacting worker: {str(e)}"
+        return f"Error contacting celery worker: {str(e)}"

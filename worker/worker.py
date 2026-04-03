@@ -1,28 +1,32 @@
 import os
 import logging
-from flask import Flask
-
-app = Flask(__name__)
+from celery import Celery
+from celery.signals import after_setup_logger
 
 log_dir = os.path.join(os.getcwd(), 'logs')
 os.makedirs(log_dir, exist_ok=True)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(log_dir, 'worker.log')),
-        logging.StreamHandler()
-    ]
-)
+logger = logging.getLogger('worker')
+logger.setLevel(logging.INFO)
 
-if __name__ != '__main__':
-    gunicorn_logger = logging.getLogger('gunicorn.error')
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
+file_handler = logging.FileHandler(os.path.join(log_dir, 'worker.log'))
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 
-@app.route("/process")
-def process():
-    app.logger.info("Worker received task")
-    app.logger.info("Processing task...")
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(stream_handler)
+
+celery_app = Celery('worker', broker='redis://redis:6379/0', backend='redis://redis:6379/0')
+
+
+@after_setup_logger.connect
+def setup_loggers(logger, *args, **kwargs):
+    logger.addHandler(file_handler)
+
+@celery_app.task(name='worker.process_task')
+def process_task():
+    logger.info("Worker received task")
+    logger.info("Processing task...")
+    logger.info("Task completed")
     return "Task completed"

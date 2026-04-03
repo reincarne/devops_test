@@ -27,6 +27,4 @@ ENV PYTHONUNBUFFERED=1
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-EXPOSE 5001
-
-CMD ["/opt/venv/bin/gunicorn", "-b", "0.0.0.0:5001", "-w", "2", "worker:app"]
+CMD ["/opt/venv/bin/celery", "-A", "worker.celery_app", "worker", "--loglevel=info"]
