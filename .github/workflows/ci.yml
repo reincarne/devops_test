@@ -4,27 +4,23 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types: [closed]
+    branches:
+      - main
 
 jobs:
-  build-and-release:
+  version:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    name: Generate SemVer
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-
+    outputs:
+      semVer: ${{ steps.version.outputs.semVer }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Format Branch Name
-        run: |
-          BRANCH_CLEAN=$(echo "${{ github.ref_name }}" | tr '/' '-')
-          echo "CLEAN_BRANCH=$BRANCH_CLEAN" >> $GITHUB_ENV
-
-      - name: Fetch Tags
-        run: git fetch --tags --force
 
       - name: Install GitVersion
         uses: gittools/actions/gitversion/setup@v4.4.2
@@ -35,30 +31,25 @@ jobs:
         id: version
         uses: gittools/actions/gitversion/execute@v4.4.2
 
-      - name: Push Release Tag
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git tag v${{ steps.version.outputs.semVer }}
-          git push origin v${{ steps.version.outputs.semVer }}
-          echo "FINAL_TAG=v${{ steps.version.outputs.semVer }}" >> $GITHUB_ENV
+  build:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Build image using Buildah
         id: build-image
         uses: redhat-actions/buildah-build@v2
         with:
           image: app
-          tags: ${{ env.FINAL_TAG || github.sha }} latest ${{ github.sha }}
+          tags: v${{ needs.version.outputs.semVer }} latest ${{ github.sha }}
           containerfiles: ./app/Dockerfile
           context: ./app
           oci: true
-          build-args: |
-            CI_BUILD_VERSION=${{ env.FINAL_TAG || github.sha }}
-            CI_COMMIT_SHA=${{ github.sha }}
-
-      - name: Export built image to tarball
-        run: |
-          buildah push ${{ steps.build-image.outputs.image-with-tag }} docker-archive:/tmp/app-image.tar
 
       - name: Push to GitHub Container Registry
         uses: redhat-actions/push-to-registry@v2
@@ -69,9 +60,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Export built image to tarball
+        run: |
+          buildah push ${{ steps.build-image.outputs.image-with-tag }} docker-archive:/tmp/app-image.tar
+
       - name: Save built image as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-image-${{ env.FINAL_TAG || github.sha }}
+          name: app-image-v${{ needs.version.outputs.semVer }}
           path: /tmp/app-image.tar
           retention-days: 7
+
+  release:
+    name: Create Release Tag
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Push Release Tag
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git tag v${{ needs.version.outputs.semVer }}
+          git push origin v${{ needs.version.outputs.semVer }}
