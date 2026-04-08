@@ -1,0 +1,62 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for app
+        run: |
+          docker build -t app:latest -f app/Dockerfile ./app
+
+      - name: Build Docker image for worker
+        run: |
+          docker build -t worker:latest -f worker/Dockerfile ./worker
+
+      - name: Test app image
+        run: |
+          docker run --rm app:latest gunicorn --version
+
+      - name: Test worker image
+        run: |
+          docker run --rm worker:latest python --version
+
+      - name: Save app image as artifact
+        run: |
+          docker save app:latest -o app-image.tar
+          gzip app-image.tar
+
+      - name: Save worker image as artifact
+        run: |
+          docker save worker:latest -o worker-image.tar
+          gzip worker-image.tar
+
+      - name: Upload app image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-image
+          path: app-image.tar.gz
+          retention-days: 30
+
+      - name: Upload worker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-image
+          path: worker-image.tar.gz
+          retention-days: 30
+
