@@ -1,0 +1,43 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Build Docker image
+        run: docker build -t app-image:latest ./app
+
+      - name: Save Docker image as artifact
+        run: docker save app-image:latest -o app-image.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-image
+          path: app-image.tar
+
+  build-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Build Docker image
+        run: docker build -t worker-image:latest ./worker
+
+      - name: Save Docker image as artifact
+        run: docker save worker-image:latest -o worker-image.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: worker-image
+          path: worker-image.tar
