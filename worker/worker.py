@@ -1,8 +1,11 @@
 import logging
+import os
 import time
 import redis
 
-LOG_DIR = "/var/log/worker"
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+LOG_DIR = os.environ.get("LOG_DIR", "/app/logs")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 logger.info("Worker started, waiting for tasks...")
 

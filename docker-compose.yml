@@ -3,6 +3,9 @@ version: "3.9"
 services:
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -14,8 +17,12 @@ services:
 
   worker:
     build: ./worker
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_DIR=/app/logs
     volumes:
-      - worker-logs:/var/log/worker
+      - worker-logs:/app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import redis; redis.Redis(host='redis', port=6379).ping()"]
       interval: 10s
@@ -30,8 +37,12 @@ services:
 
   app:
     build: ./app
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - APP_PORT=5000
     ports:
-      - "5000:5000"
+      - "5001:5000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 10s
@@ -51,4 +62,5 @@ networks:
     driver: bridge
 
 volumes:
+  redis-data:
   worker-logs:

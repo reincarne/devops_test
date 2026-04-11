@@ -1,9 +1,14 @@
+import os
 from flask import Flask
 import redis
 
 app = Flask(__name__)
 
-redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+APP_PORT = int(os.environ.get("APP_PORT", 5000))
+
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 @app.route("/")
 def home():
@@ -25,4 +30,4 @@ def send_task():
     except Exception as e:
         return f"Error sending task: {str(e)}"
 
-app.run(host="0.0.0.0", port=5000)
+app.run(host="0.0.0.0", port=APP_PORT)
